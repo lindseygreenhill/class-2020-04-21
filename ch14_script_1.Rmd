@@ -26,13 +26,48 @@ cces <- read_rds("cces_initial.rds")
 **Prompt:** Take a peek at the data and try and figure out what the variables mean. You can find the codebook here: https://dataverse.harvard.edu/file.xhtml?persistentId=doi:10.7910/DVN/II2DB6/EARRB5&version=4.1 
 
 1) What is the age of oldest person who responded to this survey?
+95
 
 2) What proportion of females voted for Trump? 
+
+```{r 1, echo=FALSE}
+cces %>% arrange(desc(age))
+
+prop <- cces %>% filter(gender == "Female") %>%
+  summarize(sum(trump == 1) / n())
+prop
+```
+
+
 
 
 # Scene 2
 
 **Prompt:** Start by creating a logistic model using every variable to try and predict the Trump vote. Consider using `logistic_reg()`, `set_engine()`, and `fit()`. Save the model to an object named `logistic_mod` and the fit to `logistic_fit`. Feel free to refer to the code from last week or to the code in the *Primer*.
+
+```{r 2, echo=FALSE}
+
+logistic_mod <- logistic_reg() %>%
+  set_engine("glm")
+
+logistic_fit <- fit(logistic_mod, trump ~ income + 
+                      gender + age + ideology + party +
+                      educ + race, data = cces)
+logistic_fit %>% tidy(conf.int = T) %>% select(term, estimate, conf.low, conf.high)
+
+# gender coef: there is a .085 increase in probability that a person will vot
+# for trump if they are female holding everything else constant
+# income isn't a good predictor of a person's vote
+# party is a very good predictor of a person's vote
+
+exp <- predict(logistic_fit, new_data = tibble(gender = "Male", age = 37, educ = 5,
+                                race = "Asian",
+                                income = 8, party = 3,
+                                ideology = 3))
+exp
+
+```
+
 
 1) Print out the model with the confidence interval and interpret the coefficient of `gender`? (Hint: use the divide-by-four rule.) Explain the association of Trump-voting with variables like `income` and `party` to your smart-but-not-mathematical boss. Why doesn't income matter?
 
@@ -47,6 +82,42 @@ cces <- read_rds("cces_initial.rds")
 1) Interpret the output of the CART model (Hint: set extra = "auto" in `prp()`.) Where would Dom fall in this decision tree? 
 
 2) Looking at the randomForest model, what does the OOB error tell us? Interpret the first row, second column of the confusion matrix, what does that 920 represent? How does 920 relate to the class.error of 0.078?
+
+```{r 3, echo=FALSE}
+set.seed(1005)
+
+tree_mod <- decision_tree() %>%
+  set_engine("rpart", model = TRUE) %>%
+  set_mode("classification")
+
+tree_fit <- fit(tree_mod, data = cces, trump ~ income + 
+                      gender + age + ideology + party +
+                      educ + race)
+tree_fit$fit %>% prp(extra = "auto", varlen = 0, faclen = 0)
+
+tree_fit
+
+rf_mod <- rand_forest(trees = 50, mtry = 7) %>%
+  set_engine("randomForest") %>%
+  set_mode("classification")
+
+rf_fit <- fit(rf_mod, data = cces, trump ~ income + 
+                      gender + age + ideology + party +
+                      educ + race)
+
+rf_fit
+
+# Dom would fall in the "yes" side of the tree in which 6% of people in that
+# category voted for trump, so he ended in the 0 bucket, or clinton vote bucket
+
+# OOB tells ust that when you run the original dataset through the bootstrap
+# model, the model predicts wrong 9% of the time
+
+# in the confusion matrix that 0, 1 number is the amount of people expected to
+# not vote for trump who did
+
+```
+
 
 
 
